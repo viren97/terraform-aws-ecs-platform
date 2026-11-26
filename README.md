@@ -1,4 +1,4 @@
-# ecs-fargate-with-ci-cd
+# terraform-ecs-fargate-bluegreen
 
 Reusable Terraform modules for running a containerised service on **AWS ECS Fargate** behind an ALB, with a **CodePipeline → CodeBuild → CodeDeploy blue/green** delivery pipeline.
 
@@ -45,7 +45,7 @@ This repo contains modules only. Compose them from your own root module, for exa
 
 ```hcl
 module "vpc" {
-  source = "github.com/viren97/ecs-fargate-with-ci-cd//modules/vpc"
+  source = "github.com/viren97/terraform-ecs-fargate-bluegreen//modules/vpc"
   name   = "my-service"
 }
 ```
