@@ -1,5 +1,7 @@
 # terraform-aws-ecs-platform
 
+[![terraform](https://github.com/viren97/terraform-aws-ecs-platform/actions/workflows/terraform.yml/badge.svg)](https://github.com/viren97/terraform-aws-ecs-platform/actions/workflows/terraform.yml)
+
 Production-style AWS platform, in Terraform, for running JVM microservices on **ECS Fargate** with
 **Postgres, Redis, Kafka and S3**, and releasing them with **canary blue/green deployments that roll
 back on their own**.
@@ -185,3 +187,7 @@ make lint       # tflint with the AWS ruleset
 ## Security scanning
 
 If you run Checkov, the remaining findings are deliberate trade-offs (for example, wildcard resources on `ecs:RegisterTaskDefinition` and `ecr:GetAuthorizationToken`, which don't support resource-level permissions).
+
+## License
+
+[Apache License 2.0](LICENSE).
