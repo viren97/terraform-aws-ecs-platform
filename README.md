@@ -1,4 +1,4 @@
-# terraform-ecs-fargate-bluegreen
+# terraform-aws-ecs-platform
 
 Production-style AWS platform, in Terraform, for running JVM microservices on **ECS Fargate** with
 **Postgres, Redis, Kafka and S3**, and releasing them with **canary blue/green deployments that roll
@@ -11,7 +11,7 @@ It hosts two real services:
 | [wallet-ledger-service](https://github.com/viren97/wallet-ledger-service) | Kotlin wallet + double-entry ledger | Own Postgres, Kafka topics `transaction.*`, Redis status cache, S3 bucket for settlement files, bank webhook HMAC secret |
 | [goal-coach-service](https://github.com/viren97/goal-coach-service) | Java AI goal coach | Own Postgres, Kafka topics `coach.*`, Redis progress cache, Anthropic + FCM secrets |
 
-Every module is also usable on its own (`source = "github.com/viren97/terraform-ecs-fargate-bluegreen//modules/<name>"`).
+Every module is also usable on its own (`source = "github.com/viren97/terraform-aws-ecs-platform//modules/<name>"`).
 
 ## Architecture
 
@@ -81,6 +81,46 @@ flowchart LR
 | **One shared ALB, host-based rules** | One load balancer for every service. CodeDeploy swaps target groups per rule, so each service still deploys on its own. |
 | **CMK per environment** | Logs, secrets, buckets, images and Redis are encrypted with one rotating key you control, with an audit trail. |
 | **Partial S3 backend with native locking** | One root module for every environment; only `envs/<env>.tfvars` and `.s3.tfbackend` differ. Terraform ≥ 1.10 locks state in S3 itself, so no DynamoDB table is needed. |
+
+## Engineering considerations
+
+**Failure modes and how they're handled**
+
+| Failure | What happens |
+|---|---|
+| Bad release (errors or latency) | The 5xx-rate / p99 alarms fire during the 10% canary and CodeDeploy shifts traffic back to blue on its own. Blue stays up 15 minutes after success, so even a late rollback is instant. |
+| Task crashes or a node dies | The ALB health check takes it out of rotation within about 45s; ECS replaces it; autoscaling keeps the minimum count spread across AZs. |
+| AZ outage | Tasks, NAT gateways (prod), RDS Multi-AZ and the Redis replica all span AZs. RDS and Redis fail over automatically (about 1–2 min). |
+| Redis unavailable | Redis is only a cache in both services, so requests fall back to Postgres: slower, but still correct. |
+| Kafka consumer lag or poison messages | Both services use a transactional outbox, so nothing is lost if Kafka is briefly down. Failed messages are retried with backoff, then dead-lettered. MSK Serverless scales partitions without broker sizing. |
+| Secret rotation | RDS rotates its own master password. ECS reads secrets at task start, so a deploy (or forced redeploy) picks up a new value without editing Terraform. |
+
+**Correctness and data safety**
+- Each service owns its own database, so a schema change or runaway query in one service can't hurt another.
+- Postgres has TLS enforced, encryption at rest, 7-day point-in-time recovery, deletion protection and a final snapshot in prod.
+- Kafka producers are idempotent (`acks=all`), and IAM lets each service touch only its own topics.
+
+**Security**
+- **Least privilege by default:** tasks run in private subnets, data stores sit in subnets with no internet route, and every security group admits other security groups rather than IP ranges.
+- **Secrets stay out of state:** no secret ever lands in Terraform state, the task definition or logs.
+- **Encryption:** one customer-managed KMS key per environment covers logs, secrets, buckets, images and Redis.
+- **Images:** they're immutable and scanned on push, so what passed the pipeline is exactly what runs.
+
+**Cost**
+- dev uses a single NAT gateway, single-AZ databases and one Redis node. That's a fraction of prod, and the code is the same.
+- Graviton (arm64) for tasks and builds is roughly 20% cheaper. Fargate Spot is available for workloads that can tolerate interruption.
+- An S3 gateway endpoint keeps image pulls and bucket traffic off the NAT. Log retention is capped, and old artifacts and images expire.
+
+**Operability**
+- Every service gets Container Insights, structured logs per service, and slow-query logging on Postgres.
+- ECS Exec is available for break-glass debugging and is audited in CloudTrail.
+- Adding a service is a single entry in `services`; the pipeline, database, alarms and deployment group come with it.
+
+**Trade-offs and what I'd do next**
+- One shared ALB keeps cost and DNS simple, but every service shares its blast radius and limits. A very high-traffic service should get its own.
+- MSK Serverless trades tuning knobs (retention beyond its limits, broker configs) for zero operations. Provisioned MSK is the upgrade path.
+- CodePipeline keeps deploys inside AWS. GitHub Actions with OIDC would be the choice for a team that already lives there.
+- Next steps: WAF on the ALB, a Route 53 record managed in the stack, per-service Redis ACLs, and SLO-based alerting on top of the deploy alarms.
 
 ## Layout
 
