@@ -1,0 +1,48 @@
+version: 0.2
+
+env:
+  shell: bash
+  variables:
+    DOCKER_BUILDKIT: "1"
+
+phases:
+  pre_build:
+    commands:
+      - set -euo pipefail
+      - IMAGE_TAG="$${CODEBUILD_RESOLVED_SOURCE_VERSION:0:12}"
+      - REGISTRY="$${REPOSITORY_URL%%/*}"
+      - aws ecr get-login-password | docker login --username AWS --password-stdin "$REGISTRY"
+%{ if test_command != "" ~}
+  build:
+    commands:
+      - echo "Running tests"
+      - ${test_command}
+      - echo "Building $REPOSITORY_URL:$IMAGE_TAG"
+      - docker build --pull -t "$REPOSITORY_URL:$IMAGE_TAG" .
+      - docker push "$REPOSITORY_URL:$IMAGE_TAG"
+%{ else ~}
+  build:
+    commands:
+      - echo "Building $REPOSITORY_URL:$IMAGE_TAG"
+      - docker build --pull -t "$REPOSITORY_URL:$IMAGE_TAG" .
+      - docker push "$REPOSITORY_URL:$IMAGE_TAG"
+%{ endif ~}
+  post_build:
+    commands:
+      # Inputs for CodeDeployToECS: the new image, the live task definition with an image placeholder, and the appspec.
+      - printf '{"ImageURI":"%s"}' "$REPOSITORY_URL:$IMAGE_TAG" > imageDetail.json
+      - >-
+        aws ecs describe-task-definition --task-definition "$TASK_FAMILY" --query taskDefinition
+        | jq '{family, taskRoleArn, executionRoleArn, networkMode, requiresCompatibilities, cpu, memory, runtimePlatform, containerDefinitions}
+        | .containerDefinitions[0].image = "<IMAGE1_NAME>"' > taskdef.json
+      - printf 'version: 0.0\nResources:\n  - TargetService:\n      Type: AWS::ECS::Service\n      Properties:\n        TaskDefinition: <TASK_DEFINITION>\n        LoadBalancerInfo:\n          ContainerName: "%s"\n          ContainerPort: %s\n' "$CONTAINER_NAME" "$CONTAINER_PORT" > appspec.yaml
+
+artifacts:
+  files:
+    - imageDetail.json
+    - taskdef.json
+    - appspec.yaml
+
+cache:
+  paths:
+    - /root/.gradle/caches/**/*

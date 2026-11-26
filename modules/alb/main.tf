@@ -1,114 +1,119 @@
-resource "aws_alb" "alb" {
-  name            = var.name
-  subnets         = var.public_subnets_ids
-  security_groups = [aws_security_group.lb_sg.id]
-}
-
-resource "aws_alb_target_group" "blue" {
-  name        = var.tg1_name
-  port        = var.app_port
-  protocol    = "HTTP"
+resource "aws_security_group" "alb" {
+  name_prefix = "${var.name}-alb-"
+  description = "Public ingress to the ALB"
   vpc_id      = var.vpc_id
-  target_type = "ip"
+  tags        = merge(var.tags, { Name = "${var.name}-alb" })
 
-  health_check {
-    healthy_threshold   = "3"
-    interval            = "300"
-    protocol            = "HTTP"
-    matcher             = "200"
-    timeout             = "3"
-    path                = var.health_check_path
-    unhealthy_threshold = "2"
-    enabled             = true
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
-resource "aws_alb_listener" "front_end1" {
-  load_balancer_arn = aws_alb.alb.id
-  port              = "443"
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = var.https_certificate_arn
+resource "aws_vpc_security_group_ingress_rule" "https" {
+  for_each          = toset(var.allowed_cidrs)
+  security_group_id = aws_security_group.alb.id
+  description       = "HTTPS"
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+  cidr_ipv4         = each.value
+}
+
+resource "aws_vpc_security_group_ingress_rule" "http" {
+  for_each          = toset(var.allowed_cidrs)
+  security_group_id = aws_security_group.alb.id
+  description       = "HTTP, redirected to HTTPS"
+  ip_protocol       = "tcp"
+  from_port         = 80
+  to_port           = 80
+  cidr_ipv4         = each.value
+}
+
+resource "aws_vpc_security_group_ingress_rule" "test_listener" {
+  for_each          = toset(var.test_listener_cidrs)
+  security_group_id = aws_security_group.alb.id
+  description       = "Blue/green test listener (green before traffic shift)"
+  ip_protocol       = "tcp"
+  from_port         = var.test_listener_port
+  to_port           = var.test_listener_port
+  cidr_ipv4         = each.value
+}
+
+resource "aws_vpc_security_group_egress_rule" "to_vpc" {
+  security_group_id = aws_security_group.alb.id
+  description       = "To targets inside the VPC"
+  ip_protocol       = "tcp"
+  from_port         = 1024
+  to_port           = 65535
+  cidr_ipv4         = var.vpc_cidr_block
+}
+
+resource "aws_lb" "this" {
+  name                       = var.name
+  load_balancer_type         = "application"
+  subnets                    = var.public_subnet_ids
+  security_groups            = [aws_security_group.alb.id]
+  drop_invalid_header_fields = true
+  enable_deletion_protection = var.deletion_protection
+  idle_timeout               = 60
+  tags                       = var.tags
+
+  dynamic "access_logs" {
+    for_each = var.access_logs_bucket == null ? [] : [1]
+    content {
+      bucket  = var.access_logs_bucket
+      prefix  = var.name
+      enabled = true
+    }
+  }
+}
+
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.this.arn
+  port              = 80
+  protocol          = "HTTP"
+
   default_action {
-    target_group_arn = aws_alb_target_group.blue.id
-    type             = "forward"
+    type = "redirect"
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
   }
 }
 
-resource "aws_alb_target_group" "green" {
-  name        = var.tg2_name
-  port        = var.app_port
-  protocol    = "HTTP"
-  vpc_id      = var.vpc_id
-  target_type = "ip"
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.this.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = var.certificate_arn
 
-  health_check {
-    healthy_threshold   = "3"
-    interval            = "300"
-    protocol            = "HTTP"
-    matcher             = "200"
-    timeout             = "3"
-    path                = var.health_check_path
-    unhealthy_threshold = "2"
+  # Services attach host-based listener rules; anything unmatched gets a 404.
+  default_action {
+    type = "fixed-response"
+    fixed_response {
+      content_type = "application/json"
+      message_body = "{\"error\":\"not_found\"}"
+      status_code  = "404"
+    }
   }
 }
 
-# ALB Security Group: Edit to restrict access to the application
-resource "aws_security_group" "lb_sg" {
-  name   = var.lg_sg_name
-  vpc_id = var.vpc_id
+resource "aws_lb_listener" "test" {
+  load_balancer_arn = aws_lb.this.arn
+  port              = var.test_listener_port
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = var.certificate_arn
 
-  ingress {
-    protocol    = "tcp"
-    from_port   = "443"
-    to_port     = var.app_port
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    protocol    = "-1"
-    from_port   = 0
-    to_port     = 0
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-# Traffic to the ECS cluster should only come from the ALB
-resource "aws_security_group" "ecs_task_sg" {
-  name   = var.ecs_task_sg_name
-  vpc_id = var.vpc_id
-
-  ingress {
-    protocol        = "tcp"
-    from_port       = var.app_port
-    to_port         = var.app_port
-    security_groups = [aws_security_group.lb_sg.id]
-  }
-
-  egress {
-    protocol    = "-1"
-    from_port   = 0
-    to_port     = 0
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-resource "aws_security_group" "elasticache" {
-  name_prefix = "elasticache-"
-  description = "allow ips to elastic cache"
-  vpc_id      = var.vpc_id
-
-  ingress {
-    protocol        = "tcp"
-    from_port       = "6379"
-    to_port         = "6379"
-    security_groups = [aws_security_group.ecs_task_sg.id]
-  }
-
-  egress {
-    protocol    = "-1"
-    from_port   = 0
-    to_port     = 0
-    cidr_blocks = ["0.0.0.0/0"]
+  default_action {
+    type = "fixed-response"
+    fixed_response {
+      content_type = "application/json"
+      message_body = "{\"error\":\"not_found\"}"
+      status_code  = "404"
+    }
   }
 }

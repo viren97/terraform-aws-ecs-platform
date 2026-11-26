@@ -1,31 +1,28 @@
-output "tg_blue_id" {
-  value = aws_alb_target_group.blue.id
+output "alb_arn" {
+  value = aws_lb.this.arn
 }
 
-output "tg_green_name" {
-  value = aws_alb_target_group.green.name
+output "alb_arn_suffix" {
+  value = aws_lb.this.arn_suffix
 }
 
-output "tg_blue_name" {
-  value = aws_alb_target_group.blue.name
+output "dns_name" {
+  value = aws_lb.this.dns_name
 }
 
-output "listener_arn" {
-  value = aws_alb_listener.front_end1.arn
+output "zone_id" {
+  value = aws_lb.this.zone_id
 }
 
-
-output "lb_sg_id" {
-  description = "load balancer security group id"
-  value       = aws_security_group.lb_sg.id
+output "security_group_id" {
+  value = aws_security_group.alb.id
 }
 
-output "ecs_sg_id" {
-  value       = aws_security_group.ecs_task_sg.id
-  description = "ecs task security group id"
+output "https_listener_arn" {
+  value = aws_lb_listener.https.arn
 }
 
-output "elasticache_sg_id" {
-  value       = aws_security_group.elasticache.id
-  description = "cache security group id"
+output "test_listener_arn" {
+  value = aws_lb_listener.test.arn
 }
+

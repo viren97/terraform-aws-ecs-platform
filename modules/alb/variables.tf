@@ -1,56 +1,53 @@
-
-variable "health_check_path" {
-  description = "health check path"
-  type        = string
-  default     = "/"
-}
-
 variable "name" {
-  description = "name of the alb"
-  type        = string
-}
-
-variable "tg1_name" {
-  description = "target group 1 name"
-  type        = string
-  default     = "blue"
-}
-
-variable "tg2_name" {
-  description = "target group 2 name"
-  type        = string
-  default     = "green"
-}
-
-variable "app_port" {
-  description = "app port to be used on all the resources"
-  type        = string
-}
-
-variable "https_certificate_arn" {
-  description = "certificate to be used on all the resources"
-  type        = string
+  type = string
 }
 
 variable "vpc_id" {
-  description = "vpc id to be used on all the resources"
+  type = string
+}
+
+variable "vpc_cidr_block" {
+  type = string
+}
+
+variable "public_subnet_ids" {
+  type = list(string)
+}
+
+variable "certificate_arn" {
+  description = "ACM certificate for the HTTPS listeners."
   type        = string
 }
 
-variable "public_subnets_ids" {
-  description = "public subnets to be used on all the resources"
+variable "allowed_cidrs" {
+  description = "CIDRs allowed to reach the public listeners."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
+variable "test_listener_port" {
+  description = "Port of the blue/green test listener used to hit green before cut-over."
+  type        = number
+  default     = 8443
+}
+
+variable "test_listener_cidrs" {
+  description = "CIDRs allowed on the test listener (keep this to your office/VPN)."
   type        = list(string)
   default     = []
 }
 
-variable "lg_sg_name" {
-  description = "load balancer sg name to be used on all the resources"
-  type        = string
-  default     = ""
+variable "deletion_protection" {
+  type    = bool
+  default = true
 }
 
-variable "ecs_task_sg_name" {
-  description = "ecs task sg name to be used on all the resources"
-  type        = string
-  default     = ""
+variable "access_logs_bucket" {
+  type    = string
+  default = null
+}
+
+variable "tags" {
+  type    = map(string)
+  default = {}
 }
