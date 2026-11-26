@@ -70,7 +70,7 @@ variable "test_listener_cidrs" {
 # ---- the services this platform hosts
 variable "services" {
   description = "Services hosted on the platform. Each gets its own database, ECR repo, pipeline and canary blue/green deploy."
-  type = map(object({
+  type        = map(object({
     short_name   = string
     repository   = string
     branch       = optional(string, "main")

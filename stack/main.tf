@@ -215,7 +215,7 @@ data "aws_iam_policy_document" "task" {
   }
 
   statement {
-    sid = "KafkaTopics"
+    sid     = "KafkaTopics"
     actions = [
       "kafka-cluster:CreateTopic",
       "kafka-cluster:DescribeTopic",
@@ -297,7 +297,7 @@ module "service" {
       SPRING_KAFKA_PROPERTIES_SASL_JAAS_CONFIG             = "software.amazon.msk.auth.iam.IAMLoginModule required;"
       SPRING_KAFKA_PROPERTIES_SASL_CLIENT_CALLBACK_HANDLER_CLASS = "software.amazon.msk.auth.iam.IAMClientCallbackHandler"
     },
-    each.value.app_bucket ? { APP_S3_BUCKET = module.app_bucket[each.key].id } : {},
+    try({ APP_S3_BUCKET = module.app_bucket[each.key].id }, {}),
     each.value.environment,
   )
 

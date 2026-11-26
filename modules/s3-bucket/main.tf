@@ -75,9 +75,9 @@ data "aws_iam_policy_document" "tls_only" {
   source_policy_documents = var.extra_policy_json == null ? [] : [var.extra_policy_json]
 
   statement {
-    sid     = "DenyInsecureTransport"
-    effect  = "Deny"
-    actions = ["s3:*"]
+    sid       = "DenyInsecureTransport"
+    effect    = "Deny"
+    actions   = ["s3:*"]
     resources = [
       aws_s3_bucket.this.arn,
       "${aws_s3_bucket.this.arn}/*",

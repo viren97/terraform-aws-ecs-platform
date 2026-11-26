@@ -1,7 +1,5 @@
 # terraform-ecs-fargate-bluegreen
 
-[![terraform](https://github.com/viren97/terraform-ecs-fargate-bluegreen/actions/workflows/terraform.yml/badge.svg)](https://github.com/viren97/terraform-ecs-fargate-bluegreen/actions/workflows/terraform.yml)
-
 Production-style AWS platform, in Terraform, for running JVM microservices on **ECS Fargate** with
 **Postgres, Redis, Kafka and S3**, and releasing them with **canary blue/green deployments that roll
 back on their own**.
@@ -100,7 +98,6 @@ modules/
   pipeline/           CodePipeline V2 → CodeBuild → CodeDeploy
 stack/                root module: composes the platform and the services map
 envs/                 dev.tfvars, prod.tfvars, *.s3.tfbackend
-.github/workflows/    fmt · validate · tflint · checkov · plan via OIDC
 ```
 
 ## Environments
@@ -135,10 +132,16 @@ The platform passes everything through the services' existing `docker` Spring pr
 - add `software.amazon.msk:aws-msk-iam-auth` to the classpath (MSK Serverless only accepts SASL/IAM);
 - create topics with replication factor 3, or leave it unset (MSK Serverless does not allow 1).
 
-## CI
+## Checks
 
-Every PR runs `terraform fmt`, `validate` on each module and the stack, `tflint` with the AWS ruleset, and `checkov`. Once the `AWS_PLAN_ROLE_ARN` repository variable is set, it also runs `plan` for dev and prod through GitHub OIDC, with no long-lived AWS keys.
+Run locally before pushing (or via the pre-commit hooks in `.pre-commit-config.yaml`):
+
+```bash
+make fmt        # terraform fmt -recursive
+make validate   # init -backend=false + validate for the stack and every module
+make lint       # tflint with the AWS ruleset
+```
 
 ## Security scanning
 
-Checkov runs in report-only mode. Remaining findings are deliberate trade-offs (for example, wildcard resources on `ecs:RegisterTaskDefinition` and `ecr:GetAuthorizationToken`, which don't support resource-level permissions).
+If you run Checkov, the remaining findings are deliberate trade-offs (for example, wildcard resources on `ecs:RegisterTaskDefinition` and `ecr:GetAuthorizationToken`, which don't support resource-level permissions).

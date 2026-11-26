@@ -39,7 +39,7 @@ data "aws_iam_policy_document" "codebuild" {
   }
 
   statement {
-    sid = "EcrPush"
+    sid     = "EcrPush"
     actions = [
       "ecr:BatchCheckLayerAvailability",
       "ecr:BatchGetImage",
@@ -62,6 +62,15 @@ data "aws_iam_policy_document" "codebuild" {
     sid       = "Artifacts"
     actions   = ["s3:GetObject", "s3:GetObjectVersion", "s3:PutObject"]
     resources = ["${var.artifact_bucket_arn}/*"]
+  }
+
+  dynamic "statement" {
+    for_each = var.kms_key_arn == null ? [] : [var.kms_key_arn]
+    content {
+      sid       = "ArtifactKms"
+      actions   = ["kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey"]
+      resources = [statement.value]
+    }
   }
 }
 
@@ -142,7 +151,7 @@ data "aws_iam_policy_document" "codepipeline_assume" {
 
 data "aws_iam_policy_document" "codepipeline" {
   statement {
-    sid = "Artifacts"
+    sid     = "Artifacts"
     actions = [
       "s3:GetObject",
       "s3:GetObjectVersion",
@@ -165,7 +174,7 @@ data "aws_iam_policy_document" "codepipeline" {
   }
 
   statement {
-    sid = "Deploy"
+    sid     = "Deploy"
     actions = [
       "codedeploy:CreateDeployment",
       "codedeploy:GetDeployment",
@@ -204,6 +213,15 @@ data "aws_iam_policy_document" "codepipeline" {
       sid       = "ApprovalNotifications"
       actions   = ["sns:Publish"]
       resources = var.approval_topic_arns
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.kms_key_arn == null ? [] : [var.kms_key_arn]
+    content {
+      sid       = "ArtifactKms"
+      actions   = ["kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey"]
+      resources = [statement.value]
     }
   }
 }
@@ -249,7 +267,7 @@ resource "aws_codepipeline" "this" {
       provider         = "CodeStarSourceConnection"
       version          = "1"
       output_artifacts = ["Source"]
-      configuration = {
+      configuration    = {
         ConnectionArn        = var.connection_arn
         FullRepositoryId     = var.repository
         BranchName           = var.branch
@@ -269,7 +287,7 @@ resource "aws_codepipeline" "this" {
       version          = "1"
       input_artifacts  = ["Source"]
       output_artifacts = ["Build"]
-      configuration = {
+      configuration    = {
         ProjectName = aws_codebuild_project.this.name
       }
     }
@@ -280,11 +298,11 @@ resource "aws_codepipeline" "this" {
     content {
       name = "Approve"
       action {
-        name     = "ReleaseApproval"
-        category = "Approval"
-        owner    = "AWS"
-        provider = "Manual"
-        version  = "1"
+        name          = "ReleaseApproval"
+        category      = "Approval"
+        owner         = "AWS"
+        provider      = "Manual"
+        version       = "1"
         configuration = length(var.approval_topic_arns) > 0 ? {
           NotificationArn = var.approval_topic_arns[0]
           CustomData      = "Approve ${var.name} for release"
@@ -302,7 +320,7 @@ resource "aws_codepipeline" "this" {
       provider        = "CodeDeployToECS"
       version         = "1"
       input_artifacts = ["Build"]
-      configuration = {
+      configuration   = {
         ApplicationName                = var.codedeploy_app_name
         DeploymentGroupName            = var.codedeploy_deployment_group_name
         TaskDefinitionTemplateArtifact = "Build"

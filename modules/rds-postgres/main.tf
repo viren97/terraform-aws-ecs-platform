@@ -87,8 +87,8 @@ resource "aws_db_instance" "this" {
 }
 
 resource "aws_iam_role" "monitoring" {
-  count       = var.enhanced_monitoring ? 1 : 0
-  name_prefix = "${var.name}-rds-mon-"
+  count              = var.enhanced_monitoring ? 1 : 0
+  name_prefix        = "${var.name}-rds-mon-"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{

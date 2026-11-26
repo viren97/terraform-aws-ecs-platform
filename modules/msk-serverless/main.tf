@@ -43,5 +43,5 @@ data "aws_msk_bootstrap_brokers" "this" {
 
 locals {
   # ARN prefixes used to scope client IAM policies to this cluster's topics and groups.
-  arn_base     = replace(aws_msk_serverless_cluster.this.arn, ":cluster/", ":%s/")
+  arn_base = replace(aws_msk_serverless_cluster.this.arn, ":cluster/", ":%s/")
 }

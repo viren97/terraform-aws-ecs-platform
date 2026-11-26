@@ -49,7 +49,7 @@ resource "aws_iam_role_policy_attachment" "execution" {
 }
 
 data "aws_iam_policy_document" "execution_secrets" {
-  count = length(local.secret_arns) > 0 ? 1 : 0
+  count = length(var.secrets) > 0 ? 1 : 0
 
   statement {
     actions   = ["secretsmanager:GetSecretValue"]
@@ -66,7 +66,7 @@ data "aws_iam_policy_document" "execution_secrets" {
 }
 
 resource "aws_iam_role_policy" "execution_secrets" {
-  count  = length(local.secret_arns) > 0 ? 1 : 0
+  count  = length(var.secrets) > 0 ? 1 : 0
   name   = "read-injected-secrets"
   role   = aws_iam_role.execution.id
   policy = data.aws_iam_policy_document.execution_secrets[0].json
@@ -338,7 +338,7 @@ resource "aws_cloudwatch_metric_alarm" "target_5xx" {
       metric_name = "HTTPCode_Target_5XX_Count"
       period      = 60
       stat        = "Sum"
-      dimensions = {
+      dimensions  = {
         LoadBalancer = var.alb_arn_suffix
         TargetGroup  = each.value.arn_suffix
       }
@@ -352,7 +352,7 @@ resource "aws_cloudwatch_metric_alarm" "target_5xx" {
       metric_name = "RequestCount"
       period      = 60
       stat        = "Sum"
-      dimensions = {
+      dimensions  = {
         LoadBalancer = var.alb_arn_suffix
         TargetGroup  = each.value.arn_suffix
       }
@@ -426,7 +426,7 @@ resource "aws_codedeploy_deployment_group" "this" {
 
   alarm_configuration {
     enabled = true
-    alarms = concat(
+    alarms  = concat(
       [for a in aws_cloudwatch_metric_alarm.target_5xx : a.alarm_name],
       [for a in aws_cloudwatch_metric_alarm.target_latency : a.alarm_name],
     )
