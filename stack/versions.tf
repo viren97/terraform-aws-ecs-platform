@@ -28,7 +28,7 @@ provider "aws" {
       Project     = var.project
       Environment = var.environment
       ManagedBy   = "terraform"
-      Repository  = "github.com/viren97/terraform-ecs-fargate-bluegreen"
+      Repository  = "github.com/viren97/terraform-aws-ecs-platform"
     }
   }
 }
